@@ -2,16 +2,22 @@
   "name": "mult-snakes-and-ladders",
   "version": "1.0.0",
   "description": "",
-  "main": "game.js",
+  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.4.1",
     "express": "^4.17.1",
-    "http": "0.0.1-security",
+    "mongoose": "^8.1.1",
     "socket.io": "^3.0.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
   }
 }
