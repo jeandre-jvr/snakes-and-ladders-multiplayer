@@ -1,5 +1,5 @@
 import socket from "./socket.js";
-import { encrypt, decrypt } from "./crypto.js";
+import { encryptPayload, decryptPayload } from "./crypto.js";
 
 let roomState = false;
 let players = [];
@@ -101,7 +101,7 @@ class Player {
 // -- CREATED HOOK -- //
 window.onload = function() {
   const userId = localStorage.getItem("userId");
-  console.log(userId)
+ 
   if (userId) {
     socket.auth = { userId };
     socket.connect();
@@ -141,32 +141,35 @@ joinBtn.addEventListener("click", () => {
 
   if (!name) return console.log('Room Name Required');
 
-  socket.emit('join-room', name); 
+  socket.emit('join-room', encryptPayload({ name })); 
 });
 
 rollDiceButton.addEventListener("click", () => {
  
   const num = rollDice();
   currentPlayer.updatePos(num);
-  socket.emit("roll-dice", {
+  socket.emit("roll-dice", encryptPayload({
     num: num,
     id: currentPlayer.id,
     pos: currentPlayer.pos,
     roomId: socket.roomId,
-    roomState
-  });
+    roomState: roomState
+  }));
 });
 
 leaveButton.addEventListener("click", () => {
-  socket.emit("leave-room", {});
+  socket.emit("leave-room");
   roomSelect.style.display = 'flex';
   gameSelect.style.display = 'none';
-  // window.location.reload();
+  roomState = false;
 });
 
 
 // -- JOIN SOCKET -- //
-socket.on("joined", ({ userId, username }) => {
+socket.on("joined", (payload) => {
+
+  const { userId, username } = decryptPayload(payload);
+
   socket.auth = { userId };
   localStorage.setItem("userId", userId);
   socket.username = username;
@@ -178,7 +181,9 @@ socket.on("joined", ({ userId, username }) => {
 });
 
 // -- JOIN ROOM -- //
-socket.on("join-room", ({ name, roomId, currentUser }) => {
+socket.on("join-room", (payload) => {
+
+  const { name, roomId, currentUser } = decryptPayload(payload);
 
   roomNameEl.textContent = `Room: ${name}`;
   socket.roomId = roomId;
@@ -193,7 +198,9 @@ socket.on("join-room", ({ name, roomId, currentUser }) => {
 });
 
 // -- LIST PLAYERS -- //
-socket.on("list-players", (users) => {
+socket.on("list-players", (payload) => {
+
+  const { users } = decryptPayload(payload);
 
   players = [];
   playersTable.innerHTML = "";
@@ -203,12 +210,18 @@ socket.on("list-players", (users) => {
     playersTable.innerHTML += `<tr><td>${user.name}</td><td><img src=${user.img} height=50 width=40></td></tr>`;
   })
 
+  if (players.length === 1) {
+    leaveButton.disabled = false;
+  }
+
   drawPins();
 });
 
 // -- PLAYER SCOREBOARD -- //
-socket.on("player-scoreboard", (scoreboard) => {
-  console.log(scoreboard)
+socket.on("player-scoreboard", (payload) => {
+
+  const { scoreboard } = decryptPayload(payload);
+
   scoreboardBody.innerHTML = '';
 
   scoreboard.forEach(player => {
@@ -229,12 +242,16 @@ socket.on("player-scoreboard", (scoreboard) => {
 });
 
 // -- ROOM STATE -- //
-socket.on("room-state", (state) => {
+socket.on("room-state", (payload) => {
+  const { state } = decryptPayload(payload);
   roomState = state;
 });
 
 // -- ROLL DICE -- //
-socket.on("roll-dice", (data, turn) => {
+socket.on("roll-dice", (payload) => {
+
+  const { data, turn } = decryptPayload(payload);
+
   const index = players.findIndex(user => user.id === data.id);
   players[index].updatePos(data.num);
   dice.src = `./images/dice/dice${data.num}.png`;
@@ -246,7 +263,9 @@ socket.on("roll-dice", (data, turn) => {
     rollDiceButton.hidden = true;
     currentPlayerEl.innerHTML = `<p>It's ${players[index].name}'s turn</p>`;
   } else {
-    leaveButton.disabled = true;
+    if (players.length > 1) {
+      leaveButton.disabled = true;
+    }
     rollDiceButton.hidden = false;
     currentPlayerEl.innerHTML = `<p>It's your turn</p>`;
   }
@@ -263,8 +282,12 @@ socket.on("roll-dice", (data, turn) => {
     currentPlayerEl.innerHTML = `<p>${winner.name} has won!</p>`;
     rollDiceButton.hidden = true;
     dice.hidden = true;
+    leaveButton.disabled = false;
 
-    socket.emit('player-win', socket.roomId, winner.id);
+    socket.emit('player-win', encryptPayload({ 
+      roomId: socket.roomId, 
+      userId: winner.id 
+    }));
   }
 
 });
@@ -275,7 +298,7 @@ socket.on("restart-game", () => {
   timerElement.style.display = 'flex';
 
   const updateTimer = () => {
-    let timer = 30; // 30 seconds
+    let timer = 10; // 10 seconds
 
     const countdown = () => {
         if (timer > 0) {

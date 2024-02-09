@@ -6,6 +6,8 @@ import { Server } from "socket.io";
 import mongoose from "mongoose";
 import { Room, User } from "./database/db.js"
 
+import { encryptPayload, decryptPayload } from "./middleware/crypto.js"
+
 const app = express();
 const server = createServer(app);
 const io = new Server(server);
@@ -50,6 +52,7 @@ io.use(async (socket, next) => {
     return next(console.log('Username Required'));
   }
   socket.username = username;
+
   next();
 
 });
@@ -64,13 +67,15 @@ io.on("connection", async (socket) => {
   }
 
   // -- JOIN SOCKET -- //
-  socket.emit("joined", {
+  socket.emit("joined", encryptPayload({
     userId: socket.userId,
     username: socket.username,
-  });
+  }));
 
   // -- JOIN ROOM -- //
-  socket.on('join-room', async (name) => {
+  socket.on('join-room', async (payload) => {
+
+    const { name } = decryptPayload(payload);
 
     const room = await findRoom(name);
     if (!room) {
@@ -78,9 +83,8 @@ io.on("connection", async (socket) => {
     }
     const roomId = room._id.toString();
 
-    const roomActive = await getRoomState(roomId);
-    if (roomActive) {
-        return console.log('Room already active');
+    if (room.active) {
+      return console.log('Room already active');
     }
 
     if (getUsersInRoom(roomId).length === 4) {
@@ -92,21 +96,21 @@ io.on("connection", async (socket) => {
   
     socket.join(roomId);
 
-    socket.emit('join-room', { name: room.name, roomId: room._id, currentUser: user });
-    io.to(roomId).emit('list-players', getUsersInRoom(roomId));
-    io.to(roomId).emit('player-scoreboard', await getRoomScoreboard(room));
+    socket.emit('join-room', encryptPayload({ name: room.name, roomId: room._id, currentUser: user }));
+    io.to(roomId).emit('list-players', encryptPayload({ users: getUsersInRoom(roomId) }));
+    io.to(roomId).emit('player-scoreboard', encryptPayload({ scoreboard: await getRoomScoreboard(room) }));
 
   });
 
   // -- GAME PLAY -- //
   socket.on("roll-dice", async (payload) => {
  
-    const { num, id, pos, roomId, roomState } = payload;
+    const { num, id, pos, roomId, roomState } = decryptPayload(payload);
 
     if (!roomState) {
       console.log('Update Room State')
       await updateRoomState(roomId, true);
-      io.to(roomId).emit("room-state", true);
+      io.to(roomId).emit("room-state", encryptPayload({ state: true }));
     }
     
     const users = getUsersInRoom(roomId)
@@ -115,12 +119,14 @@ io.on("connection", async (socket) => {
     users[index].pos = pos;
 
     const turn = num != 6 ? (index + 1) % users.length : index;
-    io.to(roomId).emit("roll-dice", payload, users[turn].id);
+    io.to(roomId).emit("roll-dice", encryptPayload({ data: { num, id }, turn: users[turn].id }));
 
   });
 
   // -- PLAYER WIN (UPDATE SCOREBOARD) -- //
-  socket.on('player-win', async (roomId, userId) => {
+  socket.on('player-win', async (payload) => {
+   
+    const { roomId, userId } = decryptPayload(payload);
 
     const room = await Room.findById(roomId);
     if (!room) {
@@ -129,7 +135,7 @@ io.on("connection", async (socket) => {
     }
 
     await updateRoomState(roomId, false);
-    io.to(roomId).emit("room-state", false);
+    io.to(roomId).emit("room-state", encryptPayload({ state: false }));
     getUsersInRoom(roomId).forEach(user => {
       user.pos = 0;
     });
@@ -142,8 +148,8 @@ io.on("connection", async (socket) => {
 
     await room.save();
 
-    io.to(roomId).emit('player-scoreboard', await getRoomScoreboard(room));
-    io.to(roomId).emit('list-players', getUsersInRoom(roomId));
+    io.to(roomId).emit('player-scoreboard', encryptPayload({ scoreboard: await getRoomScoreboard(room) }));
+    io.to(roomId).emit('list-players', encryptPayload({ users: getUsersInRoom(roomId) }));
     io.to(roomId).emit('restart-game');
 
   });
@@ -156,12 +162,12 @@ io.on("connection", async (socket) => {
     if (!user) return console.log('No User');
 
     socket.leave(user.roomId);
-    userLeavesRoom(socket.userId);
+    await userLeavesRoom(socket.userId);
 
     if(getUsersInRoom(user.roomId).length === 0) {
       await updateRoomState(user.roomId, false);
     } else {
-      io.to(user.roomId).emit('list-players', getUsersInRoom(user.roomId))
+      io.to(user.roomId).emit('list-players', encryptPayload({ users: getUsersInRoom(user.roomId) }))
     }
 
     console.log(`User ${socket.userId} has left the room`)
@@ -176,12 +182,12 @@ io.on("connection", async (socket) => {
     if (!user) return console.log('No User');
 
     socket.leave(user.roomId);
-    userLeavesRoom(socket.userId);
+    await userLeavesRoom(socket.userId);
 
     if(getUsersInRoom(user.roomId).length === 0) {
       await updateRoomState(user.roomId, false);
     } else {
-      io.to(user.roomId).emit('list-players', getUsersInRoom(user.roomId))
+      io.to(user.roomId).emit('list-players', encryptPayload({ users: getUsersInRoom(user.roomId) }))
     }
     
     console.log(`User ${socket.userId} disconnected`)
@@ -192,15 +198,27 @@ io.on("connection", async (socket) => {
 
 // -- HELPER FUNCTIONS -- //
 const findUser = async (id) => {
-  return await User.findById(id).exec();
+  try {
+    return await User.findById(id).exec();
+  } catch (err) {
+    console.log(err)
+  }
 };
 
 const saveUser = async (username) => {
-  return await User.create({ username });
+  try {
+    return await User.create({ username });
+  } catch (err) {
+    console.log(err)
+  }
 };
 
 const findRoom = async (name) => {
-  return await Room.findOne({ name }).exec();
+  try {
+    return await Room.findOne({ name }).exec();
+  } catch (err) {
+    console.log(err)
+  }
 };
 
 const setUser = (id, name, pos, img, roomId) => {
@@ -220,20 +238,16 @@ const getUsersInRoom = (roomId) => {
   return usersState.users.filter(user => user.roomId === roomId)
 };
 
-const userLeavesRoom = (id) => {
+const userLeavesRoom = async (id) => {
   usersState.setUsers(usersState.users.filter(user => user.id !== id))
 };
 
-const getRoomState = async (roomId) => {
-  const room = await Room.findById(roomId);
-  if (!room) {
-      console.log('Room not found');
-  }
-  return room.active;
-};
-
 const updateRoomState = async (roomId, isActive) => {
-  await Room.findByIdAndUpdate(roomId, { active: isActive });
+  try {
+    await Room.findByIdAndUpdate(roomId, { active: isActive });
+  } catch (err) {
+    console.log(err)
+  }
 };
 
 const assignImageToPlayer = async (roomId) => {
@@ -243,26 +257,29 @@ const assignImageToPlayer = async (roomId) => {
 };
 
 const getRoomScoreboard = async (room) => {
- 
-  const scoreboardArr = Array.from(room.scoreboard).map(([userId, wins]) => {
-    return { userId, wins };
-  });
+  try {
+    const scoreboardArr = Array.from(room.scoreboard).map(([userId, wins]) => {
+      return { userId, wins };
+    });
+    
+    const users = await User.find({ _id: { $in: Array.from(room.scoreboard.keys())  } }, 'username').exec();
+    const usernameArr = users.reduce((acc, user) => {
+      acc[user._id] = user.username;
+      return acc;
+    }, {});
+    
+    const scoreboard = scoreboardArr.map(entry => {
+      return {
+        username: usernameArr[entry.userId],
+        wins: entry.wins
+      };
+    });
   
-  const users = await User.find({ _id: { $in: Array.from(room.scoreboard.keys())  } }, 'username').exec();
-  const usernameArr = users.reduce((acc, user) => {
-    acc[user._id] = user.username;
-    return acc;
-  }, {});
-  
-  const scoreboard = scoreboardArr.map(entry => {
-    return {
-      username: usernameArr[entry.userId],
-      wins: entry.wins
-    };
-  });
-
-  scoreboard.sort((a, b) => b.wins - a.wins);
-  return scoreboard.slice(0, 5);
+    scoreboard.sort((a, b) => b.wins - a.wins);
+    return scoreboard.slice(0, 5);
+  } catch (err) {
+    console.log(err)
+  }
 };
 
 const PORT = process.env.PORT || 3001;

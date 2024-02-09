@@ -53,6 +53,10 @@ body {
   height: auto;
 }
 
+#players-table img {
+  padding-left: 20px;
+}
+
 #room-select {
   display: none;
 }
