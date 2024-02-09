@@ -1,16 +1,21 @@
-const express = require("express");
-const socket = require("socket.io");
-const http = require("http");
+import 'dotenv/config';
+import express from "express";
+import { createServer } from "http";
+import { Server } from "socket.io";
+
+import mongoose from "mongoose";
+import { Room, User } from "./database/db.js"
 
 const app = express();
-const PORT = 3000 || process.env.PORT;
-const server = http.createServer(app);
+const server = createServer(app);
+const io = new Server(server);
 
-// Set static folder
 app.use(express.static("public"));
 
-// Socket setup
-const io = socket(server);
+// MONGODB CONNECTION -- //
+mongoose.connect(process.env.MONGO_DB)
+  .then(() => console.log('Connected to Database'))
+  .catch(err => console.error('Database Connection Error:', err));
 
 // Players array
 let users = [];
@@ -39,4 +44,5 @@ io.on("connection", (socket) => {
   });
 });
 
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
