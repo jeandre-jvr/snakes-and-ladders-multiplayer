@@ -3,46 +3,120 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <title>Snakes and Ladders</title>
-    <link
-      href="https://fonts.googleapis.com/css?family=Roboto"
-      rel="stylesheet"
-    />
+
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet" />
     <link rel="stylesheet" href="css/styles.css" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,line-clamp"></script>
+
   </head>
   <body>
-    <div class="board"></div>
-    <img src="images/red_piece.png" alt="" hidden="true" id="red-piece" />
-    <img src="images/blue_piece.png" alt="" hidden="true" id="blue-piece" />
-    <img src="images/yellow_piece.png" alt="" hidden="true" id="yellow-piece" />
-    <img src="images/green_piece.png" alt="" hidden="true" id="green-piece" />
-    <div class="container">
-      <canvas id="canvas"></canvas>
-    </div>
-    <div class="info-box">
-      <div class="form-group">
-        <input
-          type="text"
-          class="form-input"
-          id="name"
-          placeholder="Your name"
-          required
-        />
-        <button class="btn draw-border" id="start-btn">Join</button>
+
+    <div class="h-screen flex flex-col">
+      <div class="top-bar">
+        <h1 class="text-xl font-bold">Snakes and Ladders</h1>
+      </div>
+ 
+      <div class="container mx-auto flex flex-1 justify-center" id="user-select">
+        <div class="flex items-center">
+          <div class="border border-gray-200 rounded-md p-8 bg-white w-96 mx-auto">
+            <h2 class="text-lg font-semibold mb-8 text-gray-900 text-center">Welcome</h2>
+    
+            <input type="text" id="username" class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-400 focus:ring-0 focus:ring-blue-400 mb-2" placeholder="Username">
+            <button class="block mt-6 w-full px-4 py-2 rounded-md focus:outline-none btn-default" id="user-btn">Let's Play</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="container mx-auto flex flex-1 justify-center" id="room-select">
+        <div class="flex items-center">
+          <div class="border border-gray-200 rounded-md p-8 bg-white w-96 mx-auto">
+            <h2 class="text-lg font-semibold mb-2 text-gray-900 text-center" id="join-room-username"></h2>
+            <p class="text-sm italic text-gray-600 mb-8 text-center">Pixel, Quest & Dice Den</p>
+  
+            <input type="text" id="join-room" class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-400 focus:ring-0 focus:ring-blue-400 mb-2" placeholder="Room Name">
+            <button class="block mt-6 w-full px-4 py-2 rounded-md focus:outline-none btn-default" id="join-btn">Join</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="container mx-auto flex flex-1" id="game-select">
+        <div class="w-1/2 px-4">
+          <div class="board"></div>
+          <img src="images/red_piece.png" alt="" hidden="true" id="red-piece" />
+          <img src="images/blue_piece.png" alt="" hidden="true" id="blue-piece" />
+          <img src="images/yellow_piece.png" alt="" hidden="true" id="yellow-piece" />
+          <img src="images/green_piece.png" alt="" hidden="true" id="green-piece" />
+          <div class="canvas">
+            <canvas id="canvas"></canvas>
+          </div>
+        </div>
+        <div class="w-1/2 px-4">
+
+            <div class="mt-5 w-full">
+                <div class="flex justify-between items-center bg-white p-4 border rounded mb-4">
+                    <div>
+                        <h2 class="text-lg font-semibold" id="room-name"></h2>
+                    </div>
+                    <div>
+                        <button class="bg-red-700 text-white py-2 px-4 rounded hover:bg-red-800 focus:outline-none focus:bg-red-800 disabled:opacity-35" id="leave-btn">Leave Room</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-4 mx-auto flex flex-1">
+           
+              <div class="w-1/2 pr-4">
+                <div class="bg-white p-4 border rounded mb-4">
+                    <h2 class="text-lg font-semibold mb-2">Players Online</h2>
+                    <br>
+                    <table id="players-table"></table>
+                </div>
+              </div>
+
+              <div class="w-1/2 pl-4">
+                <div class="bg-white p-4 border rounded mb-4">
+                    <h2 class="text-lg font-semibold mb-2 text-center">Scoreboard</h2>
+                    <table id="scoreboard" class="w-full">
+                      <thead class="mb-4">
+                        <tr>
+                            <th class="px-4 py-2 bg-gray-200 text-left">Player Name</th>
+                            <th class="px-4 py-2 bg-gray-200 text-center">Wins</th>
+                        </tr>
+                      </thead>
+                      <tbody id="scoreboard-body"></tbody>
+                    </table>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="flex items-center justify-center text-center mb-8 mt-20">
+              <div id="current-player" class="flex"></div>
+            </div>
+
+            <div class="flex items-center justify-center text-center mb-8 mt-4" id="timer" style="display: none;"></div>
+
+            <div class="mb-4 mx-auto flex flex-1">
+              <div class="w-1/2 pr-4">
+                <div class="dice">
+                  <img src="./images/dice/dice1.png" alt="" id="dice" />
+                </div>
+              </div>
+              <div class="w-1/2 pr-4">
+                <button class="mt-6 px-4 py-2 rounded-md focus:outline-none btn-default" id="roll-button">Roll</button>
+              </div>
+            </div>
+        </div>
       </div>
     </div>
-    <div id="players-box">
-      <h3>Players currently online:</h3>
-      <br>
-      <table id="players-table"></table>
-    </div>
-    <div id="current-player"></div>
-    <button class="btn draw-border" id="roll-button" hidden>Roll</button>
-    <div class="dice">
-      <img src="./images/dice/dice1.png" alt="" id="dice" />
-    </div>
-    <button class="btn draw-border" id="restart-btn" hidden>Restart</button>
+
+    <!-- Socket IO -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/index.js"></script>
+    <!-- Crypto JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js" integrity="sha512-a+SUDuwNzXDvz4XrIcXHuCf089/iJAoN4lmrXJg18XnduKK6YlDHNRalv4yd1N40OKI80tFidF+rqTFKGPoWFQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- Index JS -->
+    <script src="js/index.js" type="module"></script>
   </body>
 </html>

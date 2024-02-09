@@ -1,25 +1,19 @@
-// Making Connection
-const socket = io.connect("http://localhost:3000");
-socket.emit("joined");
+import socket from "./socket.js";
+import { encrypt, decrypt } from "./crypto.js";
 
-let players = []; // All players in the game
-let currentPlayer; // Player object for individual players
+let roomState = false;
+let players = [];
+let currentPlayer;
 
+// -- Board -- //
 let canvas = document.getElementById("canvas");
 canvas.width = document.documentElement.clientHeight * 0.9;
 canvas.height = document.documentElement.clientHeight * 0.9;
 let ctx = canvas.getContext("2d");
 
-const redPieceImg = "../images/red_piece.png";
-const bluePieceImg = "../images/blue_piece.png";
-const yellowPieceImg = "../images/yellow_piece.png";
-const greenPieceImg = "../images/green_piece.png";
-
 const side = canvas.width / 10;
 const offsetX = side / 2;
 const offsetY = side / 2 + 20;
-
-const images = [redPieceImg, bluePieceImg, yellowPieceImg, greenPieceImg];
 
 const ladders = [
   [2, 23],
@@ -42,6 +36,20 @@ const snakes = [
   [43, 17],
 ];
 
+function rollDice() {
+  const number = Math.ceil(Math.random() * 6);
+  return number;
+}
+
+function drawPins() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  players.forEach((player) => {
+    player.draw();
+  });
+}
+
+// -- PLAYER -- //
 class Player {
   constructor(id, name, pos, img) {
     this.id = id;
@@ -90,76 +98,157 @@ class Player {
   }
 }
 
-document.getElementById("start-btn").addEventListener("click", () => {
-  const name = document.getElementById("name").value;
-  document.getElementById("name").disabled = true;
-  document.getElementById("start-btn").hidden = true;
-  document.getElementById("roll-button").hidden = false;
-  currentPlayer = new Player(players.length, name, 0, images[players.length]);
-  document.getElementById(
-    "current-player"
-  ).innerHTML = `<p>Anyone can roll</p>`;
-  socket.emit("join", currentPlayer);
+// -- CREATED HOOK -- //
+window.onload = function() {
+  const userId = localStorage.getItem("userId");
+  console.log(userId)
+  if (userId) {
+    socket.auth = { userId };
+    socket.connect();
+  }
+};
+
+// -- ELEMENTS -- //
+const userBtn = document.getElementById('user-btn');
+const joinBtn = document.getElementById('join-btn');
+const rollDiceButton = document.getElementById("roll-button");
+const leaveButton = document.getElementById("leave-btn");
+
+const joinRoomUsername = document.getElementById('join-room-username');
+const roomNameEl = document.getElementById('room-name');
+const currentPlayerEl = document.getElementById("current-player");
+const dice = document.getElementById("dice");
+const timerElement = document.getElementById('timer');
+const playersTable = document.getElementById("players-table");
+const scoreboardBody = document.getElementById('scoreboard-body');
+
+const userSelect = document.getElementById('user-select');
+const roomSelect = document.getElementById('room-select');
+const gameSelect = document.getElementById('game-select');
+
+// LISTERNERS -- //
+userBtn.addEventListener("click", () => {
+  const username = document.getElementById("username").value;
+
+  if (!username) return console.log('Username Required');
+
+  socket.auth = { username };
+  socket.connect();
 });
 
-document.getElementById("roll-button").addEventListener("click", () => {
+joinBtn.addEventListener("click", () => {
+  const name = document.getElementById("join-room").value;
+
+  if (!name) return console.log('Room Name Required');
+
+  socket.emit('join-room', name); 
+});
+
+rollDiceButton.addEventListener("click", () => {
+ 
   const num = rollDice();
   currentPlayer.updatePos(num);
-  socket.emit("rollDice", {
+  socket.emit("roll-dice", {
     num: num,
     id: currentPlayer.id,
     pos: currentPlayer.pos,
+    roomId: socket.roomId,
+    roomState
   });
 });
 
-function rollDice() {
-  const number = Math.ceil(Math.random() * 6);
-  return number;
-}
+leaveButton.addEventListener("click", () => {
+  socket.emit("leave-room", {});
+  roomSelect.style.display = 'flex';
+  gameSelect.style.display = 'none';
+  // window.location.reload();
+});
 
-function drawPins() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  players.forEach((player) => {
-    player.draw();
-  });
-}
+// -- JOIN SOCKET -- //
+socket.on("joined", ({ userId, username }) => {
+  socket.auth = { userId };
+  localStorage.setItem("userId", userId);
+  socket.username = username;
 
-// Listen for events
-socket.on("join", (data) => {
-  players.push(new Player(players.length, data.name, data.pos, data.img));
+  joinRoomUsername.textContent = `Hi ${username} - Join Room`;
+
+  userSelect.style.display = 'none';
+  roomSelect.style.display = 'flex';
+});
+
+// -- JOIN ROOM -- //
+socket.on("join-room", ({ name, roomId, currentUser }) => {
+
+  roomNameEl.textContent = `Room: ${name}`;
+  socket.roomId = roomId;
+
+  currentPlayer = new Player(currentUser.id, currentUser.name, currentUser.pos, currentUser.img);
+  
+  roomSelect.style.display = 'none';
+  gameSelect.style.display = 'flex';
+  rollDiceButton.hidden = false;
+
+  currentPlayerEl.innerHTML = `<p>Anyone can roll</p>`;
+});
+
+// -- LIST PLAYERS -- //
+socket.on("list-players", (users) => {
+
+  players = [];
+  playersTable.innerHTML = "";
+
+  users.forEach(user => {
+    players.push(new Player(user.id, user.name, user.pos, user.img));
+    playersTable.innerHTML += `<tr><td>${user.name}</td><td><img src=${user.img} height=50 width=40></td></tr>`;
+  })
+
   drawPins();
-  document.getElementById(
-    "players-table"
-  ).innerHTML += `<tr><td>${data.name}</td><td><img src=${data.img} height=50 width=40></td></tr>`;
 });
 
-socket.on("joined", (data) => {
-  data.forEach((player, index) => {
-    players.push(new Player(index, player.name, player.pos, player.img));
-    console.log(player);
-    document.getElementById(
-      "players-table"
-    ).innerHTML += `<tr><td>${player.name}</td><td><img src=${player.img}></td></tr>`;
+// -- PLAYER SCOREBOARD -- //
+socket.on("player-scoreboard", (scoreboard) => {
+  console.log(scoreboard)
+  scoreboardBody.innerHTML = '';
+
+  scoreboard.forEach(player => {
+      const row = document.createElement('tr');
+      const nameCell = document.createElement('td');
+      const winsCell = document.createElement('td');
+
+      nameCell.textContent = player.username;
+      winsCell.textContent = player.wins;
+      nameCell.classList.add('text-left', 'pl-4', 'pt-2');
+      winsCell.classList.add('text-center');
+
+      row.appendChild(nameCell);
+      row.appendChild(winsCell);
+
+      scoreboardBody.appendChild(row);
   });
-  drawPins();
 });
 
-socket.on("rollDice", (data, turn) => {
-  players[data.id].updatePos(data.num);
-  document.getElementById("dice").src = `./images/dice/dice${data.num}.png`;
+// -- ROOM STATE -- //
+socket.on("room-state", (state) => {
+  roomState = state;
+});
+
+// -- ROLL DICE -- //
+socket.on("roll-dice", (data, turn) => {
+  const index = players.findIndex(user => user.id === data.id);
+  players[index].updatePos(data.num);
+  dice.src = `./images/dice/dice${data.num}.png`;
   drawPins();
 
   if (turn != currentPlayer.id) {
-    document.getElementById("roll-button").hidden = true;
-    document.getElementById(
-      "current-player"
-    ).innerHTML = `<p>It's ${players[turn].name}'s turn</p>`;
+    leaveButton.disabled = false;
+    const index = players.findIndex(user => user.id === turn);
+    rollDiceButton.hidden = true;
+    currentPlayerEl.innerHTML = `<p>It's ${players[index].name}'s turn</p>`;
   } else {
-    document.getElementById("roll-button").hidden = false;
-    document.getElementById(
-      "current-player"
-    ).innerHTML = `<p>It's your turn</p>`;
+    leaveButton.disabled = true;
+    rollDiceButton.hidden = false;
+    currentPlayerEl.innerHTML = `<p>It's your turn</p>`;
   }
 
   let winner;
@@ -171,20 +260,38 @@ socket.on("rollDice", (data, turn) => {
   }
 
   if (winner) {
-    document.getElementById(
-      "current-player"
-    ).innerHTML = `<p>${winner.name} has won!</p>`;
-    document.getElementById("roll-button").hidden = true;
-    document.getElementById("dice").hidden = true;
-    document.getElementById("restart-btn").hidden = false;
+    currentPlayerEl.innerHTML = `<p>${winner.name} has won!</p>`;
+    rollDiceButton.hidden = true;
+    dice.hidden = true;
+
+    socket.emit('player-win', socket.roomId, winner.id);
   }
+
 });
 
-// Logic to restart the game
-document.getElementById("restart-btn").addEventListener("click", () => {
-  socket.emit("restart");
-});
+// -- RESTART GAME -- //
+socket.on("restart-game", () => {
 
-socket.on("restart", () => {
-  window.location.reload();
+  timerElement.style.display = 'flex';
+
+  const updateTimer = () => {
+    let timer = 30; // 30 seconds
+
+    const countdown = () => {
+        if (timer > 0) {
+          timer--;
+          timerElement.textContent = `Restarting Game In: ${timer} seconds`;
+          setTimeout(countdown, 1000);
+        } else {
+          dice.hidden = false;
+          rollDiceButton.hidden = false;
+          timerElement.style.display = 'none';
+          currentPlayerEl.innerHTML = `<p>Anyone can roll</p>`;
+        }
+    };
+
+    countdown();
+  };
+
+  updateTimer();
 });
